@@ -34,6 +34,14 @@
                   []
                   ks)))
 
+(defn same-or-throw [expected got]
+  (let [[only-in-expected only-in-got same] (data/diff expected got)]
+    (when (or (some? only-in-expected) (some? only-in-got))
+      (throw (ex-info "Unexpected input."
+                      {:only-in-expected only-in-expected
+                       :only-in-got only-in-got
+                       :same same})))))
+
 (def africastalking-app-id (env :africastalking-app-id))
 (def africastalking-account-email (env :africastalking-account-email))
 (def africastalking-account-password (env :africastalking-account-password))
@@ -48,11 +56,6 @@
 (def columns [:Date :SessionId :ServiceCode :PhoneNumber :Hops :Duration :Cost :Status :Input])
 
 (def africastalking-page-size 10000)
-
-(defn same-or-throw [expected got]
-  (let [[only-in-expected only-in-got same] (data/diff expected got)]
-    (when (or (some? only-in-expected) (some? only-in-got))
-      (throw (new Exception (str "As expected: " only-in-expected " Got extra: " only-in-got " Same: " same))))))
 
 (defn csv-data->maps [csv-data]
   (some->> csv-data                                         ; Allow empty seqs, which signal the last page
