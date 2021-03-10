@@ -30,7 +30,7 @@
 (defn select-vals [m ks]
   (remove nil?
           (reduce (fn [acc k]
-                    (conj acc (m k)))
+                    (conj acc (k m)))
                   []
                   ks)))
 
