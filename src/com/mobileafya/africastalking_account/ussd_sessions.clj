@@ -84,7 +84,7 @@
                     ^String SessionId
                     ^String ServiceCode
                     ^String PhoneNumber
-                    ^int Hops
+                    ^Integer Hops
                     ^Duration Duration
                     ^CurrencyValue Cost
                     ^Keyword Status
