@@ -25,7 +25,8 @@
   (:import
     (java.util Currency Locale)
     (java.time Duration LocalDate LocalDateTime ZoneId ZonedDateTime)
-    (java.time.format DateTimeFormatter)))
+    (java.time.format DateTimeFormatter)
+    (clojure.lang Keyword)))
 
 (defn select-vals [m ks]
   (remove nil?
@@ -46,6 +47,8 @@
 (def africastalking-account-email (env :africastalking-account-email))
 (def africastalking-account-password (env :africastalking-account-password))
 
+(def africastalking-page-size 10000)
+
 (def africastalking-timezone (ZoneId/of "UTC+3"))
 (def africastalking-time-formatter (DateTimeFormatter/ofPattern "LLLL d, u h:m a" Locale/ENGLISH))
 
@@ -53,65 +56,77 @@
 
 (def no-currency (Currency/getInstance "XXX"))
 
-(def columns [:Date :SessionId :ServiceCode :PhoneNumber :Hops :Duration :Cost :Status :Input])
+(defrecord CurrencyValue [^Currency currency
+                          ^BigDecimal value])
 
-(def africastalking-page-size 10000)
-
-(defn csv-data->maps [csv-data]
-  (some->> csv-data                                         ; Allow empty seqs, which signal the last page
-           first                                            ; First row is the header
-           (map #(string/replace % #"\s" ""))
-           (map keyword)
-           (same-or-throw columns))                         ; Ensure format is as expected
-  (map zipmap
-       (repeat columns)
-       (rest csv-data)))
-
-(defn parse-time [s]
+(defn parse-time ^ZonedDateTime [^String s]
   (ZonedDateTime/of
     (LocalDateTime/parse s africastalking-time-formatter)
     africastalking-timezone))
 
-(defn parse-duration [s]
+(defn parse-duration ^Duration [^String s]
   (Duration/ofSeconds
     (Integer/parseInt (string/replace s #"s$" ""))))
 
-(defn parse-cost [s]
+(defn parse-cost ^CurrencyValue [^String s]
   (if (= s "None")
-    {:currency no-currency
-     :value    0}
+    (->CurrencyValue no-currency 0)
     (let [[^String currency-code ^String value] (string/split s #"\s+" 2)]
-      {:currency (Currency/getInstance currency-code)
-       :value    (BigDecimal. value)})))
+      (->CurrencyValue
+        (Currency/getInstance currency-code)
+        (BigDecimal. value)))))
 
-(defn parse-ussd-input [s]
+(defn parse-ussd-input ^String [^String s]
   (when (not= s "N/A")
     s))
 
-(defn parse-session [session]
-  (-> session
-      (update :Date parse-time)
-      (update :Duration parse-duration)
-      (update :Cost parse-cost)
-      (update :Hops #(Integer/parseInt %))
-      (update :Status keyword)
-      (update :Input parse-ussd-input)))
+(defrecord Session [^ZonedDateTime Date
+                    ^String SessionId
+                    ^String ServiceCode
+                    ^String PhoneNumber
+                    ^int Hops
+                    ^Duration Duration
+                    ^CurrencyValue Cost
+                    ^Keyword Status
+                    ^String Input])
 
-(defn format-session [session]
-  (-> session
+(def columns (map name (Session/getBasis)))
+
+(defn csv-data->Session ^Session [[Date SessionId ServiceCode PhoneNumber Hops Duration Cost Status Input]]
+  (->Session
+    (parse-time Date)
+    SessionId
+    ServiceCode
+    PhoneNumber
+    (Integer/parseInt Hops)
+    (parse-duration Duration)
+    (parse-cost Cost)
+    (keyword Status)
+    (parse-ussd-input Input)))
+
+(defn Session->csv-data [^Session session]
+  (-> (into {} session)
       (update :Date #(.format % DateTimeFormatter/ISO_INSTANT))
       (update :Duration #(.toString %))
       (update :Cost #(str (:currency %) " " (:value %)))
       (update :Hops str)
       (update :Status name)
-      (update :Input #(or % ""))))
+      (update :Input #(or % ""))
+      (select-vals (map keyword columns))))
+
+(defn strip-header [header csv-data]
+  (some->> csv-data                             ; Allow empty seqs, which signal the last page
+           first                                ; First row is the header
+           (map #(string/replace % #"\s" ""))
+           (same-or-throw header))              ; Ensure format is as expected
+  (rest csv-data))
 
 ; Retrieve sessions between start and end date (both inclusive), up to a
 ; maximum of `africastalking-page-size`.  If this does not include all
 ; sessions in that range, Africa's Talking will give us the latest sessions
 ; (i.e. the ones closer to `end-date`).  If one day has more than
 ; `africastalking-page-size` sessions, we have no way of retrieving them all.
-(defn get-sessions [^LocalDate start-date ^LocalDate end-date access-token]
+(defn get-sessions [^LocalDate start-date ^LocalDate end-date ^String access-token]
   (->>
     (client/get
       (str
@@ -126,15 +141,15 @@
                       :endDate   (.format end-date iso-date-formatter)}})
     :body
     csv/read-csv
-    csv-data->maps
-    (map parse-session)))
+    (strip-header columns)
+    (map csv-data->Session)))
 
 ; Returns a lazy-seq of all sessions up to `end-date`
 ; WARNING: The lazy-seq will make HTTP calls!
 (defn get-all-sessions
-  ([access-token]
+  ([^String access-token]
    (get-all-sessions (LocalDate/now) access-token))
-  ([^LocalDate end-date access-token]
+  ([^LocalDate end-date ^String access-token]
    (when-let [sessions (seq (get-sessions (.minusMonths end-date 1)
                                           end-date
                                           access-token))]
@@ -149,12 +164,11 @@
 (defn export-to
   ([filename access-token]
    (export-to filename (LocalDate/now) access-token))
-  ([filename ^LocalDate end-date access-token]
-   (let [sessions (->> (get-all-sessions end-date access-token)
-                       (map format-session)
-                       (map #(select-vals % columns)))]
+  ([filename end-date access-token]
+   (let [sessions (map Session->csv-data
+                       (get-all-sessions end-date access-token))]
      (with-open [writer (io/writer filename)]
-       (csv/write-csv writer [(map name columns)])
+       (csv/write-csv writer [columns])
        (csv/write-csv writer sessions)))))
 
 (defn login [email password]
