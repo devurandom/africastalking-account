@@ -49,12 +49,13 @@
 
 (def africastalking-page-size 10000)
 
-(def africastalking-timezone (ZoneId/of "UTC+3"))
-(def africastalking-time-formatter (DateTimeFormatter/ofPattern "LLLL d, u h:m a" Locale/ENGLISH))
+(def ^ZoneId africastalking-request-timezone (ZoneId/of "UTC"))
+(def ^ZoneId africastalking-response-timezone (ZoneId/of "UTC+1"))
+(def ^DateTimeFormatter africastalking-time-formatter (DateTimeFormatter/ofPattern "LLLL d, u h:m a" Locale/ENGLISH))
 
-(def iso-date-formatter DateTimeFormatter/ISO_DATE)
+(def ^DateTimeFormatter iso-date-formatter DateTimeFormatter/ISO_LOCAL_DATE)
 
-(def no-currency (Currency/getInstance "XXX"))
+(def ^Currency no-currency (Currency/getInstance "XXX"))
 
 (defrecord CurrencyValue [^Currency currency
                           ^BigDecimal value])
@@ -62,7 +63,7 @@
 (defn parse-time ^ZonedDateTime [^String s]
   (ZonedDateTime/of
     (LocalDateTime/parse s africastalking-time-formatter)
-    africastalking-timezone))
+    africastalking-response-timezone))
 
 (defn parse-duration ^Duration [^String s]
   (Duration/ofSeconds
@@ -126,6 +127,7 @@
 ; sessions in that range, Africa's Talking will give us the latest sessions
 ; (i.e. the ones closer to `end-date`).  If one day has more than
 ; `africastalking-page-size` sessions, we have no way of retrieving them all.
+; Make sure start-date and end-date are both in africastalking-request-timezone!
 (defn get-sessions [^LocalDate start-date ^LocalDate end-date ^String access-token]
   (->>
     (client/get
@@ -135,7 +137,7 @@
         "/ussd/sessions/export")
       {:headers      {"X-Client-Id" "nest.account.dashboard"}
        :oauth-token  access-token
-       :query-params {:page      0
+       :query-params {:page      0 ;<< Appears to be ignored if `:count` is `africastalking-page-size`
                       :count     africastalking-page-size
                       :startDate (.format start-date iso-date-formatter)
                       :endDate   (.format end-date iso-date-formatter)}})
@@ -144,22 +146,42 @@
     (strip-header columns)
     (map csv-data->Session)))
 
+(defn date-in-request-tz ^LocalDate [^ZonedDateTime datetime]
+  (.toLocalDate
+    (.withZoneSameInstant
+      datetime
+      africastalking-request-timezone)))
+
 ; Returns a lazy-seq of all sessions up to `end-date`
 ; WARNING: The lazy-seq will make HTTP calls!
 (defn get-all-sessions
   ([^String access-token]
-   (get-all-sessions (LocalDate/now) access-token))
+   (get-all-sessions (LocalDate/now africastalking-request-timezone) access-token))
   ([^LocalDate end-date ^String access-token]
    (when-let [sessions (seq (get-sessions (.minusMonths end-date 1)
                                           end-date
                                           access-token))]
-     (let [earliest-date (.toLocalDate
-                           (:Date (last sessions)))]
-       (lazy-seq (concat
-                   sessions
-                   (get-all-sessions
-                     (.minusDays earliest-date 1)
-                     access-token)))))))
+     ; We might not have gotten all sessions on `earliest-date`, since Africa's
+     ; Talking truncates after `africastalking-page-size` results.  Hence we
+     ; need to treat sessions on that date special.
+     (let [earliest-date (date-in-request-tz (:Date (last sessions)))
+           sessions-after-earliest-date (filter
+                                          #(.isAfter (date-in-request-tz (:Date %))
+                                                     earliest-date)
+                                          sessions)]
+       (if (or (.isAfter earliest-date end-date) (.isEqual earliest-date end-date))
+         ; `sessions-after-earliest-date` might not include all sessions of
+         ; that day, so finish up with sessions of the last accessible day:
+         (get-sessions end-date
+                       end-date
+                       access-token)
+         ; Remove sessions on `earliest-date`, since they will also be
+         ; returned from the call to `get-all-sessions`:
+         (lazy-seq (concat
+                     sessions-after-earliest-date
+                     (get-all-sessions
+                       earliest-date
+                       access-token))))))))
 
 (defn export-to [filename access-token]
   (let [sessions (map Session->csv-data
