@@ -161,15 +161,12 @@
                      (.minusDays earliest-date 1)
                      access-token)))))))
 
-(defn export-to
-  ([filename access-token]
-   (export-to filename (LocalDate/now) access-token))
-  ([filename end-date access-token]
-   (let [sessions (map Session->csv-data
-                       (get-all-sessions end-date access-token))]
-     (with-open [writer (io/writer filename)]
-       (csv/write-csv writer [columns])
-       (csv/write-csv writer sessions)))))
+(defn export-to [filename access-token]
+  (let [sessions (map Session->csv-data
+                      (get-all-sessions access-token))]
+    (with-open [writer (io/writer filename)]
+      (csv/write-csv writer [columns])
+      (csv/write-csv writer sessions))))
 
 (defn login [email password]
   (->
