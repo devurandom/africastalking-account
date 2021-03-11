@@ -20,7 +20,7 @@
     [clojure.data.csv :as csv]
     [clojure.data.json :as json]
     [clj-http.client :as client]
-    [debux.core :refer [dbg]]
+    [debux.core :refer [dbg dbgn]]
     [environ.core :refer [env]])
   (:import
     (java.util Currency Locale)
