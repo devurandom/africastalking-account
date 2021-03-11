@@ -40,8 +40,8 @@
     (when (or (some? only-in-expected) (some? only-in-got))
       (throw (ex-info "Unexpected input."
                       {:only-in-expected only-in-expected
-                       :only-in-got only-in-got
-                       :same same})))))
+                       :only-in-got      only-in-got
+                       :same             same})))))
 
 (def africastalking-app-id (env :africastalking-app-id))
 (def africastalking-account-email (env :africastalking-account-email))
@@ -115,10 +115,10 @@
       (select-vals (map keyword columns))))
 
 (defn strip-header [header csv-data]
-  (some->> csv-data                             ; Allow empty seqs, which signal the last page
-           first                                ; First row is the header
+  (some->> csv-data                                         ; Allow empty seqs, which signal the last page
+           first                                            ; First row is the header
            (map #(string/replace % #"\s" ""))
-           (same-or-throw header))              ; Ensure format is as expected
+           (same-or-throw header))                          ; Ensure format is as expected
   (rest csv-data))
 
 ; Retrieve sessions between start and end date (both inclusive), up to a
