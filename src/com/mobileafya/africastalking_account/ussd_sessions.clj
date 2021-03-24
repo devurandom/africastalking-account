@@ -152,43 +152,54 @@
       datetime
       africastalking-request-timezone)))
 
+(defn max-localdate [^LocalDate reference ^LocalDate date]
+  (if (.isAfter date reference)
+    date
+    reference))
+
 ; Returns a lazy-seq of all sessions up to `end-date`
 ; WARNING: The lazy-seq will make HTTP calls!
-(defn get-all-sessions
-  ([^String access-token]
-   (get-all-sessions (LocalDate/now africastalking-request-timezone) access-token))
-  ([^LocalDate end-date ^String access-token]
-   (when-let [sessions (seq (get-sessions (.minusMonths end-date 1)
-                                          end-date
-                                          access-token))]
-     ; We might not have gotten all sessions on `earliest-date`, since Africa's
-     ; Talking truncates after `africastalking-page-size` results.  Hence we
-     ; need to treat sessions on that date special.
-     (let [earliest-date (date-in-request-tz (:Date (last sessions)))
-           sessions-after-earliest-date (filter
-                                          #(.isAfter (date-in-request-tz (:Date %))
-                                                     earliest-date)
-                                          sessions)]
-       (if (or (.isAfter earliest-date end-date) (.isEqual earliest-date end-date))
-         ; `sessions-after-earliest-date` might not include all sessions of
-         ; that day, so finish up with sessions of the last accessible day:
-         (get-sessions end-date
-                       end-date
-                       access-token)
-         ; Remove sessions on `earliest-date`, since they will also be
-         ; returned from the call to `get-all-sessions`:
-         (lazy-seq (concat
-                     sessions-after-earliest-date
-                     (get-all-sessions
-                       earliest-date
-                       access-token))))))))
+(defn get-all-sessions [^LocalDate start-date ^LocalDate end-date ^String access-token]
+  (let [early-limit-date (max-localdate
+                           start-date
+                           (.minusMonths end-date 1))]
+    (when-let [sessions (seq (get-sessions early-limit-date
+                                           end-date
+                                           access-token))]
+      ; We might not have gotten all sessions on `earliest-date`, since Africa's
+      ; Talking truncates after `africastalking-page-size` results.  Hence we
+      ; need to treat sessions on that date special.
+      (let [earliest-session-date (date-in-request-tz (:Date (last sessions)))
+            sessions-after-earliest-date (filter
+                                           #(.isAfter (date-in-request-tz (:Date %))
+                                                      earliest-session-date)
+                                           sessions)]
+        (if (or (.isAfter earliest-session-date end-date) (.isEqual earliest-session-date end-date))
+          ; `sessions-after-earliest-date` might not include all sessions of
+          ; that day, so finish up with sessions of the last accessible day:
+          (get-sessions end-date
+                        end-date
+                        access-token)
+          ; Remove sessions on `earliest-date`, since they will also be
+          ; returned from the call to `get-all-sessions`:
+          (lazy-seq (concat
+                      sessions-after-earliest-date
+                      (get-all-sessions
+                        start-date
+                        earliest-session-date
+                        access-token))))))))
 
-(defn export-to [filename access-token]
-  (let [sessions (map Session->csv-data
-                      (get-all-sessions access-token))]
-    (with-open [writer (io/writer filename)]
-      (csv/write-csv writer [columns])
-      (csv/write-csv writer sessions))))
+(defn export-to
+  ([filename access-token]
+   (export-to filename (LocalDate/now africastalking-request-timezone) access-token))
+  ([filename end-date access-token]
+   (export-to filename LocalDate/MIN end-date access-token))
+  ([filename start-date end-date access-token]
+   (let [sessions (map Session->csv-data
+                       (get-all-sessions start-date end-date access-token))]
+     (with-open [writer (io/writer filename)]
+       (csv/write-csv writer [columns])
+       (csv/write-csv writer sessions)))))
 
 (defn login [email password]
   (->
