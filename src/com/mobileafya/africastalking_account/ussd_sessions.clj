@@ -218,5 +218,5 @@
     :access_token))
 
 (comment
-  (let [token (login africastalking-username africastalking-password)]
+  (let [token (login africastalking-account-email africastalking-account-password)]
     (export-to "sessions.csv" token)))
