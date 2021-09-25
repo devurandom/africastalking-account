@@ -4,7 +4,7 @@
             :url "https://www.gnu.org/licenses/agpl-3.0"}
   :dependencies [[org.clojure/clojure "1.10.3"]
                  [org.clojure/data.csv "1.0.0"]
-                 [clj-http "3.12.1"]
+                 [clj-http "3.12.3"]
                  [environ "1.2.0"]]
   :profiles {:dev {:dependencies [[philoskim/debux "0.7.9"]]}
              :uberjar {:dependencies [[philoskim/debux-stubs "0.7.9"]]}}
