@@ -6,6 +6,6 @@
                  [org.clojure/data.csv "1.0.0"]
                  [clj-http "3.12.1"]
                  [environ "1.2.0"]]
-  :profiles {:dev {:dependencies [[philoskim/debux "0.7.9"]]}
+  :profiles {:dev {:dependencies [[philoskim/debux "0.8.1"]]}
              :uberjar {:dependencies [[philoskim/debux-stubs "0.7.9"]]}}
   :repl-options {:init-ns com.mobileafya.africastalking-account.ussd-sessions})
