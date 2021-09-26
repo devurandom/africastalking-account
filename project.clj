@@ -7,5 +7,5 @@
                  [clj-http "3.12.3"]
                  [environ "1.2.0"]]
   :profiles {:dev {:dependencies [[philoskim/debux "0.8.1"]]}
-             :uberjar {:dependencies [[philoskim/debux-stubs "0.7.9"]]}}
+             :uberjar {:dependencies [[philoskim/debux-stubs "0.8.1"]]}}
   :repl-options {:init-ns com.mobileafya.africastalking-account.ussd-sessions})
