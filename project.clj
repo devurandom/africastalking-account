@@ -2,7 +2,7 @@
   :description "Retrieve account data from Africa's Talking"
   :license {:name "AGPL-3.0-or-later"
             :url "https://www.gnu.org/licenses/agpl-3.0"}
-  :dependencies [[org.clojure/clojure "1.11.2"]
+  :dependencies [[org.clojure/clojure "1.11.3"]
                  [org.clojure/data.csv "1.1.0"]
                  [clj-http "3.13.0"]
                  [environ "1.2.0"]]
