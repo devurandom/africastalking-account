@@ -1,8 +1,8 @@
 # africastalking-account
 
 This is a toolbox to retrieve account data from Africa's Talking.  You are
-expected to execute the functions you need from a REPL.  Use e.g. `lein repl` or
-the "REPL" run configuration in [JetBrains IntelliJ IDEA](https://www.jetbrains.com/idea/)
+expected to execute the functions you need from a REPL.  Use e.g. Clojure CLI
+or the "REPL" run configuration in [JetBrains IntelliJ IDEA](https://www.jetbrains.com/idea/)
 with [Ideogram Cursive](https://cursive-ide.com/).  Find example invocations in
 the comment at the bottom of each file.
 
